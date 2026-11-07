@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>தமிழ் எழுத்துப் பயிற்சி</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mukta+Malar:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Mukta Malar', 'Noto Sans Tamil', sans-serif;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 20px 10px;
+      min-height: 100vh;
+    }
+    .tutor-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+      padding: 24px;
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+    .nav-pills {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .pill {
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: #f1f5f9;
+      color: #475569;
+      font-weight: 700;
+      border: 1px solid #cbd5e1;
+      cursor: pointer;
+    }
+    .pill.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #2563eb;
+    }
+    .badge {
+      display: inline-block;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      margin-bottom: 8px;
+    }
+    .title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 4px 0 16px;
+    }
+    .canvas-wrap {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      margin: 0 auto;
+      border-radius: 16px;
+      background: #f8fafc;
+      border: 2px dashed #cbd5e1;
+      overflow: hidden;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 300px;
+      height: 300px;
+      touch-action: none;
+    }
+    #bgCanvas { opacity: 0.15; }
+    .instruction {
+      font-size: 14px;
+      font-weight: 600;
+      color: #475569;
+      margin: 16px 0 12px;
+      min-height: 20px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    button {
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-audio { background: #2563eb; color: #ffffff; }
+    .btn-reset { background: #e2e8f0; color: #334155; }
+  </style>
+</head>
+<body>
+
+<div class="tutor-card">
+  <div class="nav-pills" id="selector"></div>
+
+  <div class="badge" id="letterBadge">உயிர் எழுத்து</div>
+  <div class="title" id="letterTitle">எழுதிப் பழகு</div>
+
+  <div class="canvas-wrap">
+    <canvas id="bgCanvas" width="300" height="300"></canvas>
+    <canvas id="drawCanvas" width="300" height="300"></canvas>
+  </div>
+
+  <div class="instruction" id="feedback">வரிசையாக இணைக்கவும்</div>
+
+  <div class="actions">
+    <button class="btn-audio" onclick="playAudio()">🔊 ஒலி</button>
+    <button class="btn-reset" onclick="resetPractice()">மீண்டும்</button>
+  </div>
+</div>
+
+<script>
+  let letters = [];
+  let currentIdx = 0;
+  let waypoints = [];
+  let activeIndex = 0;
+  let isDrawing = false;
+
+  const bgCanvas = document.getElementById('bgCanvas');
+  const bgCtx = bgCanvas.getContext('2d');
+  const drawCanvas = document.getElementById('drawCanvas');
+  const ctx = drawCanvas.getContext('2d');
+  const feedback = document.getElementById('feedback');
+  const selector = document.getElementById('selector');
+
+  fetch('./data.json')
+    .then(res => res.json())
+    .then(data => {
+      letters = data;
+      initPills();
+      loadLetter(0);
+    });
+
+  function initPills() {
+    selector.innerHTML = '';
+    letters.forEach((item, idx) => {
+      const pill = document.createElement('div');
+      pill.className = `pill ${idx === currentIdx ? 'active' : ''}`;
+      pill.innerText = item.letter;
+      pill.onclick = () => loadLetter(idx);
+      selector.appendChild(pill);
+    });
+  }
+
+  function loadLetter(idx) {
+    currentIdx = idx;
+    const cur = letters[idx];
+    document.getElementById('letterBadge').innerText = `உயிர் எழுத்து • ${cur.type}`;
+    document.getElementById('letterTitle').innerText = `எழுதிப் பழகு: ${cur.letter}`;
+    feedback.innerText = cur.desc;
+    feedback.style.color = '#475569';
+    waypoints = cur.waypoints.map(w => ({ ...w, hit: false }));
+    activeIndex = 0;
+
+    document.querySelectorAll('.pill').forEach((p, i) => {
+      p.className = `pill ${i === currentIdx ? 'active' : ''}`;
+    });
+
+    renderBackground();
+    resetCanvas();
+  }
+
+  function renderBackground() {
+    bgCtx.clearRect(0, 0, 300, 300);
+    bgCtx.font = "200px 'Mukta Malar', 'Noto Sans Tamil', sans-serif";
+    bgCtx.fillStyle = "#0f172a";
+    bgCtx.textAlign = "center";
+    bgCtx.textBaseline = "middle";
+    bgCtx.fillText(letters[currentIdx].letter, 150, 150);
+  }
+
+  function drawMarkers() {
+    waypoints.forEach((pt, idx) => {
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 11, 0, Math.PI * 2);
+      ctx.fillStyle = pt.hit ? "#16a34a" : (idx === activeIndex ? "#f59e0b" : "#cbd5e1");
+      ctx.fill();
+
+      ctx.fillStyle = pt.hit || idx === activeIndex ? "#ffffff" : "#475569";
+      ctx.font = "bold 11px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(pt.label, pt.x, pt.y);
+    });
+  }
+
+  function checkProximity(x, y) {
+    if (activeIndex >= waypoints.length) return;
+    const target = waypoints[activeIndex];
+    const dist = Math.hypot(target.x - x, target.y - y);
+    if (dist < 25) {
+      target.hit = true;
+      activeIndex++;
+      if (activeIndex === waypoints.length) {
+        feedback.innerText = "அருமை! சரியாக எழுதிவிட்டீர்கள் 🎉";
+        feedback.style.color = "#16a34a";
+      }
+    }
+  }
+
+  function getCoordinates(e) {
+    const rect = drawCanvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left) * (300 / rect.width),
+      y: (clientY - rect.top) * (300 / rect.height)
+    };
+  }
+
+  drawCanvas.addEventListener('pointerdown', (e) => {
+    isDrawing = true;
+    const pos = getCoordinates(e);
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#2563eb';
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    checkProximity(pos.x, pos.y);
+  });
+
+  drawCanvas.addEventListener('pointermove', (e) => {
+    if (!isDrawing) return;
+    const pos = getCoordinates(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    checkProximity(pos.x, pos.y);
+    drawMarkers();
+  });
+
+  window.addEventListener('pointerup', () => { isDrawing = false; });
+
+  function resetCanvas() {
+    ctx.clearRect(0, 0, 300, 300);
+    drawMarkers();
+  }
+
+  function resetPractice() {
+    waypoints.forEach(p => p.hit = false);
+    activeIndex = 0;
+    feedback.innerText = letters[currentIdx].desc;
+    feedback.style.color = "#475569";
+    resetCanvas();
+  }
+
+  function playAudio() {
+    if ('speechSynthesis' in window) {
+      const utter = new SpeechSynthesisUtterance(letters[currentIdx].letter);
+      utter.lang = "ta-IN";
+      window.speechSynthesis.speak(utter);
+    }
+  }
+</script>
+</body>
+</html>
