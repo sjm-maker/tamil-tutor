@@ -100,11 +100,12 @@
     }
     #bgCanvas { opacity: 0.16; }
     .instruction {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       color: #475569;
       margin: 14px 0 10px;
-      min-height: 24px;
+      min-height: 38px;
+      line-height: 1.4;
     }
     .actions {
       display: flex;
@@ -139,7 +140,6 @@
 <body>
 
 <div class="tutor-card">
-  <!-- Horizontal scrollable letter selection -->
   <div class="nav-container">
     <div class="nav-pills" id="selector"></div>
   </div>
@@ -163,10 +163,12 @@
 <script>
   let letters = [];
   let currentIdx = 0;
-  let waypoints = [];
-  let activeIndex = 0;
-  let strokes = []; // stores stroke paths
-  let currentStroke = [];
+  let activeStrokeIdx = 0;
+  let activeWaypointIdx = 0;
+  let strokeData = []; // normalized strokes with hit flags
+
+  let completedPaths = []; // finished stroke coordinate arrays
+  let currentPath = [];
   let isDrawing = false;
 
   const bgCanvas = document.getElementById('bgCanvas');
@@ -203,10 +205,16 @@
     feedback.innerText = cur.desc;
     feedback.style.color = '#475569';
 
-    waypoints = cur.waypoints.map(w => ({ ...w, hit: false }));
-    activeIndex = 0;
-    strokes = [];
-    currentStroke = [];
+    // Deep copy strokes
+    strokeData = cur.strokes.map(s => ({
+      ...s,
+      waypoints: s.waypoints.map(w => ({ ...w, hit: false }))
+    }));
+
+    activeStrokeIdx = 0;
+    activeWaypointIdx = 0;
+    completedPaths = [];
+    currentPath = [];
 
     document.querySelectorAll('.pill').forEach((p, i) => {
       p.className = `pill ${i === currentIdx ? 'active' : ''}`;
@@ -225,80 +233,123 @@
     bgCtx.fillText(letters[currentIdx].letter, 160, 160);
   }
 
-  // Pure stroke rendering: Round butt / lineCap with glowing magical gradient
+  // Semi-magnetic path snapping: Blends 65% toward waypoint target to look beautiful
+  // while retaining 35% natural user hand dynamics
+  function smoothBlend(userPt, targetWaypoint) {
+    if (!targetWaypoint) return userPt;
+    const dist = Math.hypot(targetWaypoint.x - userPt.x, targetWaypoint.y - userPt.y);
+    if (dist < 45) {
+      const snapStrength = Math.max(0, 1 - (dist / 45)) * 0.65;
+      return {
+        x: userPt.x + (targetWaypoint.x - userPt.x) * snapStrength,
+        y: userPt.y + (targetWaypoint.y - userPt.y) * snapStrength
+      };
+    }
+    return userPt;
+  }
+
   function redrawCanvas() {
     ctx.clearRect(0, 0, 320, 320);
 
     const gradient = ctx.createLinearGradient(40, 40, 280, 280);
-    gradient.addColorStop(0, '#ec4899');   // Vibrant Pink
+    gradient.addColorStop(0, '#ec4899');   // Vivid Pink
     gradient.addColorStop(0.5, '#8b5cf6'); // Royal Purple
-    gradient.addColorStop(1, '#3b82f6');   // Bright Blue
+    gradient.addColorStop(1, '#3b82f6');   // Electric Blue
 
     ctx.lineWidth = 14;
-    ctx.lineCap = 'round';   // Clean round cap
-    ctx.lineJoin = 'round';  // Smooth joint
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = gradient;
     ctx.shadowColor = 'rgba(139, 92, 246, 0.45)';
     ctx.shadowBlur = 10;
 
-    // Draw past strokes
-    strokes.forEach(path => {
-      if (path.length < 2) return;
-      ctx.beginPath();
-      ctx.moveTo(path[0].x, path[0].y);
-      for (let i = 1; i < path.length; i++) {
-        ctx.lineTo(path[i].x, path[i].y);
+    // Render past completed distinct strokes
+    completedPaths.forEach(path => {
+      if (path.length === 1) {
+        // Dot stroke (like in ஃ or ஈ)
+        ctx.beginPath();
+        ctx.arc(path[0].x, path[0].y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      } else if (path.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(path[0].x, path[0].y);
+        for (let i = 1; i < path.length; i++) {
+          ctx.lineTo(path[i].x, path[i].y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
     });
 
-    // Draw active live stroke
-    if (currentStroke.length > 1) {
+    // Render current active stroke in progress
+    if (currentPath.length === 1) {
       ctx.beginPath();
-      ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
-      for (let i = 1; i < currentStroke.length; i++) {
-        ctx.lineTo(currentStroke[i].x, currentStroke[i].y);
+      ctx.arc(currentPath[0].x, currentPath[0].y, 7, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    } else if (currentPath.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(currentPath[0].x, currentPath[0].y);
+      for (let i = 1; i < currentPath.length; i++) {
+        ctx.lineTo(currentPath[i].x, currentPath[i].y);
       }
       ctx.stroke();
     }
 
-    // Reset shadow for crisp waypoint dots
     ctx.shadowBlur = 0;
     drawWaypoints();
   }
 
   function drawWaypoints() {
-    waypoints.forEach((pt, idx) => {
+    if (activeStrokeIdx >= strokeData.length) return;
+
+    // Only draw waypoints belonging to the current active stroke to avoid confusion
+    const currentStroke = strokeData[activeStrokeIdx];
+    currentStroke.waypoints.forEach((pt, idx) => {
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 12, 0, Math.PI * 2);
-      ctx.fillStyle = pt.hit ? "#10b981" : (idx === activeIndex ? "#f59e0b" : "#cbd5e1");
+      ctx.arc(pt.x, pt.y, 11, 0, Math.PI * 2);
+      ctx.fillStyle = pt.hit ? "#10b981" : (idx === activeWaypointIdx ? "#f59e0b" : "#cbd5e1");
       ctx.fill();
 
-      // White outline ring for active target
-      if (idx === activeIndex) {
-        ctx.lineWidth = 3;
+      if (idx === activeWaypointIdx) {
+        ctx.lineWidth = 2.5;
         ctx.strokeStyle = "#ffffff";
         ctx.stroke();
       }
 
-      ctx.fillStyle = pt.hit || idx === activeIndex ? "#ffffff" : "#475569";
-      ctx.font = "bold 11px sans-serif";
+      ctx.fillStyle = pt.hit || idx === activeWaypointIdx ? "#ffffff" : "#475569";
+      ctx.font = "bold 10px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(pt.label, pt.x, pt.y);
     });
   }
 
-  function checkProximity(x, y) {
-    if (activeIndex >= waypoints.length) return;
-    const target = waypoints[activeIndex];
+  function checkTargetProximity(x, y) {
+    if (activeStrokeIdx >= strokeData.length) return;
+    const currentStroke = strokeData[activeStrokeIdx];
+    if (activeWaypointIdx >= currentStroke.waypoints.length) return;
+
+    const target = currentStroke.waypoints[activeWaypointIdx];
     const dist = Math.hypot(target.x - x, target.y - y);
-    if (dist < 28) {
+
+    if (dist < 30) {
       target.hit = true;
-      activeIndex++;
-      if (activeIndex === waypoints.length) {
-        feedback.innerText = "அருமை! சரியாக எழுதிவிட்டீர்கள் 🎉";
-        feedback.style.color = "#10b981";
+      activeWaypointIdx++;
+
+      // Check if current stroke is finished
+      if (activeWaypointIdx >= currentStroke.waypoints.length) {
+        activeStrokeIdx++;
+        activeWaypointIdx = 0;
+
+        if (activeStrokeIdx >= strokeData.length) {
+          feedback.innerText = "அருமை! எழுத்தை முழுமையாக எழுதிவிட்டீர்கள் 🎉";
+          feedback.style.color = "#10b981";
+        } else {
+          const nextName = strokeData[activeStrokeIdx].name;
+          feedback.innerText = `அடுத்த பகுதி: ${nextName}`;
+          feedback.style.color = "#2563eb";
+        }
       }
     }
   }
@@ -315,34 +366,51 @@
 
   drawCanvas.addEventListener('pointerdown', (e) => {
     isDrawing = true;
-    const pos = getCoordinates(e);
-    currentStroke = [pos];
-    checkProximity(pos.x, pos.y);
+    const rawPos = getCoordinates(e);
+
+    let activeTarget = null;
+    if (activeStrokeIdx < strokeData.length) {
+      activeTarget = strokeData[activeStrokeIdx].waypoints[activeWaypointIdx];
+    }
+
+    const smoothed = smoothBlend(rawPos, activeTarget);
+    currentPath = [smoothed];
+    checkTargetProximity(smoothed.x, smoothed.y);
     redrawCanvas();
   });
 
   drawCanvas.addEventListener('pointermove', (e) => {
     if (!isDrawing) return;
-    const pos = getCoordinates(e);
-    currentStroke.push(pos);
-    checkProximity(pos.x, pos.y);
+    const rawPos = getCoordinates(e);
+
+    let activeTarget = null;
+    if (activeStrokeIdx < strokeData.length) {
+      activeTarget = strokeData[activeStrokeIdx].waypoints[activeWaypointIdx];
+    }
+
+    const smoothed = smoothBlend(rawPos, activeTarget);
+    currentPath.push(smoothed);
+    checkTargetProximity(smoothed.x, smoothed.y);
     redrawCanvas();
   });
 
   window.addEventListener('pointerup', () => {
-    if (isDrawing && currentStroke.length > 0) {
-      strokes.push(currentStroke);
-      currentStroke = [];
+    if (isDrawing) {
+      if (currentPath.length > 0) {
+        completedPaths.push([...currentPath]);
+      }
+      currentPath = [];
       isDrawing = false;
       redrawCanvas();
     }
   });
 
   function resetPractice() {
-    waypoints.forEach(p => p.hit = false);
-    activeIndex = 0;
-    strokes = [];
-    currentStroke = [];
+    strokeData.forEach(s => s.waypoints.forEach(w => w.hit = false));
+    activeStrokeIdx = 0;
+    activeWaypointIdx = 0;
+    completedPaths = [];
+    currentPath = [];
     feedback.innerText = letters[currentIdx].desc;
     feedback.style.color = "#475569";
     redrawCanvas();
