@@ -11,67 +11,82 @@
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
       font-family: 'Mukta Malar', 'Noto Sans Tamil', sans-serif;
-      background: #f8fafc;
+      background: #f1f5f9;
       display: flex;
       flex-direction: column;
       align-items: center;
       margin: 0;
-      padding: 20px 10px;
+      padding: 16px 8px;
       min-height: 100vh;
     }
     .tutor-card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
-      border-radius: 20px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-      padding: 24px;
+      border-radius: 24px;
+      box-shadow: 0 12px 30px -8px rgba(30, 41, 59, 0.08);
+      padding: 20px 16px;
       width: 100%;
-      max-width: 380px;
+      max-width: 400px;
       text-align: center;
     }
+    .nav-container {
+      overflow-x: auto;
+      white-space: nowrap;
+      padding: 4px 2px 14px;
+      margin-bottom: 8px;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .nav-container::-webkit-scrollbar { display: none; }
     .nav-pills {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      margin-bottom: 16px;
+      display: inline-flex;
+      gap: 6px;
     }
     .pill {
-      padding: 6px 14px;
-      border-radius: 20px;
-      background: #f1f5f9;
-      color: #475569;
+      min-width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #f8fafc;
+      color: #334155;
       font-weight: 700;
-      border: 1px solid #cbd5e1;
+      font-size: 18px;
+      border: 1.5px solid #cbd5e1;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .pill.active {
-      background: #2563eb;
+      background: linear-gradient(135deg, #6366f1, #3b82f6);
       color: #ffffff;
-      border-color: #2563eb;
+      border-color: transparent;
+      transform: scale(1.08);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
     }
     .badge {
       display: inline-block;
       background: #eff6ff;
-      color: #1d4ed8;
+      color: #2563eb;
       font-size: 13px;
       font-weight: 700;
-      padding: 4px 12px;
+      padding: 5px 14px;
       border-radius: 9999px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .title {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 700;
       color: #0f172a;
-      margin: 4px 0 16px;
+      margin: 4px 0 14px;
     }
     .canvas-wrap {
       position: relative;
-      width: 300px;
-      height: 300px;
+      width: 320px;
+      height: 320px;
       margin: 0 auto;
-      border-radius: 16px;
-      background: #f8fafc;
+      border-radius: 20px;
+      background: #fafaf9;
       border: 2px dashed #cbd5e1;
       overflow: hidden;
     }
@@ -79,17 +94,17 @@
       position: absolute;
       top: 0;
       left: 0;
-      width: 300px;
-      height: 300px;
+      width: 320px;
+      height: 320px;
       touch-action: none;
     }
-    #bgCanvas { opacity: 0.15; }
+    #bgCanvas { opacity: 0.16; }
     .instruction {
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
       color: #475569;
-      margin: 16px 0 12px;
-      min-height: 20px;
+      margin: 14px 0 10px;
+      min-height: 24px;
     }
     .actions {
       display: flex;
@@ -97,32 +112,44 @@
       justify-content: center;
     }
     button {
-      padding: 10px 18px;
-      font-size: 14px;
+      padding: 10px 20px;
+      font-size: 15px;
       font-weight: 700;
       font-family: inherit;
-      border-radius: 10px;
+      border-radius: 12px;
       border: none;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      transition: transform 0.1s ease;
     }
-    .btn-audio { background: #2563eb; color: #ffffff; }
-    .btn-reset { background: #e2e8f0; color: #334155; }
+    button:active { transform: scale(0.97); }
+    .btn-audio {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    }
+    .btn-reset {
+      background: #e2e8f0;
+      color: #334155;
+    }
   </style>
 </head>
 <body>
 
 <div class="tutor-card">
-  <div class="nav-pills" id="selector"></div>
+  <!-- Horizontal scrollable letter selection -->
+  <div class="nav-container">
+    <div class="nav-pills" id="selector"></div>
+  </div>
 
   <div class="badge" id="letterBadge">உயிர் எழுத்து</div>
   <div class="title" id="letterTitle">எழுதிப் பழகு</div>
 
   <div class="canvas-wrap">
-    <canvas id="bgCanvas" width="300" height="300"></canvas>
-    <canvas id="drawCanvas" width="300" height="300"></canvas>
+    <canvas id="bgCanvas" width="320" height="320"></canvas>
+    <canvas id="drawCanvas" width="320" height="320"></canvas>
   </div>
 
   <div class="instruction" id="feedback">வரிசையாக இணைக்கவும்</div>
@@ -138,6 +165,8 @@
   let currentIdx = 0;
   let waypoints = [];
   let activeIndex = 0;
+  let strokes = []; // stores stroke paths
+  let currentStroke = [];
   let isDrawing = false;
 
   const bgCanvas = document.getElementById('bgCanvas');
@@ -169,36 +198,88 @@
   function loadLetter(idx) {
     currentIdx = idx;
     const cur = letters[idx];
-    document.getElementById('letterBadge').innerText = `உயிர் எழுத்து • ${cur.type}`;
+    document.getElementById('letterBadge').innerText = `${cur.category || 'உயிர் எழுத்து'} • ${cur.type}`;
     document.getElementById('letterTitle').innerText = `எழுதிப் பழகு: ${cur.letter}`;
     feedback.innerText = cur.desc;
     feedback.style.color = '#475569';
+
     waypoints = cur.waypoints.map(w => ({ ...w, hit: false }));
     activeIndex = 0;
+    strokes = [];
+    currentStroke = [];
 
     document.querySelectorAll('.pill').forEach((p, i) => {
       p.className = `pill ${i === currentIdx ? 'active' : ''}`;
     });
 
     renderBackground();
-    resetCanvas();
+    redrawCanvas();
   }
 
   function renderBackground() {
-    bgCtx.clearRect(0, 0, 300, 300);
-    bgCtx.font = "200px 'Mukta Malar', 'Noto Sans Tamil', sans-serif";
+    bgCtx.clearRect(0, 0, 320, 320);
+    bgCtx.font = "210px 'Mukta Malar', 'Noto Sans Tamil', sans-serif";
     bgCtx.fillStyle = "#0f172a";
     bgCtx.textAlign = "center";
     bgCtx.textBaseline = "middle";
-    bgCtx.fillText(letters[currentIdx].letter, 150, 150);
+    bgCtx.fillText(letters[currentIdx].letter, 160, 160);
   }
 
-  function drawMarkers() {
+  // Pure stroke rendering: Round butt / lineCap with glowing magical gradient
+  function redrawCanvas() {
+    ctx.clearRect(0, 0, 320, 320);
+
+    const gradient = ctx.createLinearGradient(40, 40, 280, 280);
+    gradient.addColorStop(0, '#ec4899');   // Vibrant Pink
+    gradient.addColorStop(0.5, '#8b5cf6'); // Royal Purple
+    gradient.addColorStop(1, '#3b82f6');   // Bright Blue
+
+    ctx.lineWidth = 14;
+    ctx.lineCap = 'round';   // Clean round cap
+    ctx.lineJoin = 'round';  // Smooth joint
+    ctx.strokeStyle = gradient;
+    ctx.shadowColor = 'rgba(139, 92, 246, 0.45)';
+    ctx.shadowBlur = 10;
+
+    // Draw past strokes
+    strokes.forEach(path => {
+      if (path.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.stroke();
+    });
+
+    // Draw active live stroke
+    if (currentStroke.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
+      for (let i = 1; i < currentStroke.length; i++) {
+        ctx.lineTo(currentStroke[i].x, currentStroke[i].y);
+      }
+      ctx.stroke();
+    }
+
+    // Reset shadow for crisp waypoint dots
+    ctx.shadowBlur = 0;
+    drawWaypoints();
+  }
+
+  function drawWaypoints() {
     waypoints.forEach((pt, idx) => {
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 11, 0, Math.PI * 2);
-      ctx.fillStyle = pt.hit ? "#16a34a" : (idx === activeIndex ? "#f59e0b" : "#cbd5e1");
+      ctx.arc(pt.x, pt.y, 12, 0, Math.PI * 2);
+      ctx.fillStyle = pt.hit ? "#10b981" : (idx === activeIndex ? "#f59e0b" : "#cbd5e1");
       ctx.fill();
+
+      // White outline ring for active target
+      if (idx === activeIndex) {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+      }
 
       ctx.fillStyle = pt.hit || idx === activeIndex ? "#ffffff" : "#475569";
       ctx.font = "bold 11px sans-serif";
@@ -212,12 +293,12 @@
     if (activeIndex >= waypoints.length) return;
     const target = waypoints[activeIndex];
     const dist = Math.hypot(target.x - x, target.y - y);
-    if (dist < 25) {
+    if (dist < 28) {
       target.hit = true;
       activeIndex++;
       if (activeIndex === waypoints.length) {
         feedback.innerText = "அருமை! சரியாக எழுதிவிட்டீர்கள் 🎉";
-        feedback.style.color = "#16a34a";
+        feedback.style.color = "#10b981";
       }
     }
   }
@@ -227,45 +308,44 @@
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     return {
-      x: (clientX - rect.left) * (300 / rect.width),
-      y: (clientY - rect.top) * (300 / rect.height)
+      x: (clientX - rect.left) * (320 / rect.width),
+      y: (clientY - rect.top) * (320 / rect.height)
     };
   }
 
   drawCanvas.addEventListener('pointerdown', (e) => {
     isDrawing = true;
     const pos = getCoordinates(e);
-    ctx.lineWidth = 10;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#2563eb';
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
+    currentStroke = [pos];
     checkProximity(pos.x, pos.y);
+    redrawCanvas();
   });
 
   drawCanvas.addEventListener('pointermove', (e) => {
     if (!isDrawing) return;
     const pos = getCoordinates(e);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
+    currentStroke.push(pos);
     checkProximity(pos.x, pos.y);
-    drawMarkers();
+    redrawCanvas();
   });
 
-  window.addEventListener('pointerup', () => { isDrawing = false; });
-
-  function resetCanvas() {
-    ctx.clearRect(0, 0, 300, 300);
-    drawMarkers();
-  }
+  window.addEventListener('pointerup', () => {
+    if (isDrawing && currentStroke.length > 0) {
+      strokes.push(currentStroke);
+      currentStroke = [];
+      isDrawing = false;
+      redrawCanvas();
+    }
+  });
 
   function resetPractice() {
     waypoints.forEach(p => p.hit = false);
     activeIndex = 0;
+    strokes = [];
+    currentStroke = [];
     feedback.innerText = letters[currentIdx].desc;
     feedback.style.color = "#475569";
-    resetCanvas();
+    redrawCanvas();
   }
 
   function playAudio() {
